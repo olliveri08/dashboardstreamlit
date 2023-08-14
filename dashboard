@@ -1,0 +1,114 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import locale
+import altair as alt
+#import sqlalchemy as sql
+#import streamlit_authenticator as sa
+
+# Definir a localização para o formato de moeda
+locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')  # Use a localização adequada ao seu sistema
+
+############################## leitura dos arquivos ########################################
+
+#ler arquivo de dados
+df = pd.read_excel('C:/Users/Hearthz Gaming/OneDrive - mindbi/Área de Trabalho/Dashboard Streamlit/vendas.xlsx')
+df = pd.DataFrame(df)
+
+############################## tratamento e manipulação dos dados ###########################
+
+# Converter as colunas 'ValorUnitario' e 'QtdItens' para numérico
+df['ValorUnitario'] = pd.to_numeric(df['ValorUnitario'], errors='coerce')
+df['QtdItens'] = pd.to_numeric(df['QtdItens'], errors='coerce')
+
+# Criar a coluna 'valor_total'
+df['valortotal'] = df['ValorUnitario'] * df['QtdItens']
+
+# Calcular a diferença de dias entre 'DataEmissao' e 'DataVencimento'
+df['DiferecaDias'] = (df['DataVencimento'] - df['DataEmissao']).dt.days
+
+# Função para aplicar a condicional de status
+def definir_status(row):
+    if row['DiferecaDias'] < 22:
+        return "Emitido com prazo seguro"
+    else:
+        return "Emitido com prazo extrapolado"
+
+# Criar a coluna 'status' aplicando a função definir_status
+df['Status'] = df.apply(definir_status, axis=1)
+
+# Exibir as primeiras linhas do DataFrame tratado
+#print(df.head())
+
+############################### Metricas ###########################
+
+total_clientes = df['cdCliente'].nunique()
+total_vendas = locale.format("%.0f",df['NFe'].nunique(), grouping=True)
+media_vendas = round(df['valortotal'].mean(),2)
+mediana_vendas = df['valortotal'].median()
+
+############################## Criação do dashboard ###########################
+
+#configuração da paginaa
+
+st.set_page_config(
+    page_title="Dashboard de Vendas",
+    page_icon="➊",
+    layout='wide',
+    initial_sidebar_state='expanded',
+)
+
+#configuração da paginaa
+with st.sidebar:
+    st.subheader('MENU')
+    filtroVendedor = st.selectbox(
+        "Selecione o Vendedor:",
+        options=df['cdVendedor'].unique()
+    )
+    filtroProduto = st.selectbox(
+        "Selecione o Produto:",
+        options=df['cdProduto'].unique()
+    )
+    filtroCliente = st.selectbox(
+        "Selecione o Cliente:",
+        options = df['cdCliente'].unique()
+    )
+
+#provisionar streamlit e crud da aba cliente
+
+st.title("Dashboard de Vendas")
+
+#metricas superiores
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Clientes", total_clientes)
+col2.metric("Qtd Vendas", total_vendas)
+col3.metric("Ticket Médio", media_vendas)
+col4.metric("Mediana de Vendas", mediana_vendas)
+
+
+#vendas por vendedor
+# Agrupar os dados por 'cdVendedor' e calcular a soma das vendas
+vendas_por_vendedor = df.groupby('cdVendedor')['valortotal'].sum().reset_index() 
+media_por_vendedor = df.groupby('cdVendedor')['valortotal'].mean().reset_index()
+
+# Filtrar dados por vendedor selecionado
+#vendas_filtradas = vendas_por_vendedor[vendas_por_vendedor['cdVendedor'] == filtroVendedor]
+#media_filtrada = media_por_vendedor[media_por_vendedor['cdVendedor'] == filtroVendedor]
+
+st.subheader('Métricas Por vendedor')
+col5, col6= st.columns(2)
+col5.bar_chart(vendas_por_vendedor.set_index('cdVendedor'))
+col6.bar_chart(media_por_vendedor.set_index('cdVendedor'))
+
+#vendas por Data
+# Agrupar os dados por 'Data' e calcular a soma das vendas
+vendas_por_data = df.groupby('DataEmissao')['valortotal'].nunique().reset_index()
+st.subheader('Vendas Por Dia')
+st.area_chart(vendas_por_data.set_index('DataEmissao'))
+
+# Tabelas de Dados 
+st.subheader('Detalhe de Vendas')
+st.table(df)
+
+
+
